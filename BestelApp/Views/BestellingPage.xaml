@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewModels="clr-namespace:BestelApp.ViewModels"
+             xmlns:models="clr-namespace:BestelApp.Shared.Models;assembly=BestelApp.Shared"
+             x:DataType="viewModels:BestellingViewModel"
+             x:Class="BestelApp.Views.BestellingPage"
+             Title="BestelApp">
+    <ScrollView Padding="10,10,10,20">
+        <VerticalStackLayout Spacing="15">
+
+            <!-- Klanten Beheer -->
+            <Frame Padding="15" CornerRadius="10" BorderColor="LightGray" HasShadow="True">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Klanten" FontSize="20" FontAttributes="Bold" />
+                    <CollectionView ItemsSource="{Binding Klanten}" 
+                                    SelectionMode="Single" 
+                                    SelectedItem="{Binding SelectedKlantForEdit}"
+                                    MinimumHeightRequest="150"
+                                    MaximumHeightRequest="300">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Klant">
+                                <Grid Padding="10" ColumnDefinitions="*, Auto" RowSpacing="5">
+                                    <VerticalStackLayout Grid.Column="0" Spacing="3">
+                                        <Label Text="{Binding Naam}" FontAttributes="Bold" FontSize="16" />
+                                        <Label Text="{Binding Email}" FontSize="14" TextColor="Gray" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="1" 
+                                            Text="Verwijder" 
+                                            BackgroundColor="Red" 
+                                            TextColor="White"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:BestellingViewModel}}, Path=DeleteKlantCommand}" 
+                                            CommandParameter="{Binding .}" 
+                                            Margin="5,0,0,0"
+                                            HeightRequest="44"
+                                            MinimumWidthRequest="90"/>
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                    <BoxView HeightRequest="1" Color="LightGray" Margin="0,5" />
+                    <Label Text="Klant Details" FontSize="18" FontAttributes="Bold" />
+                    <Entry Placeholder="Naam" Text="{Binding Naam}" HeightRequest="48" FontSize="16" />
+                    <Entry Placeholder="Email" Text="{Binding Email}" Keyboard="Email" HeightRequest="48" FontSize="16" />
+                    <HorizontalStackLayout Spacing="10" HorizontalOptions="FillAndExpand">
+                        <Button Text="Opslaan" 
+                                Command="{Binding SaveKlantCommand}" 
+                                HorizontalOptions="FillAndExpand" 
+                                BackgroundColor="BlueViolet"
+                                TextColor="White"
+                                HeightRequest="48"
+                                FontSize="16"/>
+                        <Button Text="Nieuwe klant" 
+                                Command="{Binding ClearKlantFormCommand}" 
+                                HorizontalOptions="FillAndExpand" 
+                                BackgroundColor="BlueViolet"
+                                TextColor="White"
+                                HeightRequest="48"
+                                FontSize="16"/>
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Bestaande Bestellingen -->
+            <Frame Padding="15" CornerRadius="10" BorderColor="LightGray" HasShadow="True">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Bestellingen" FontSize="20" FontAttributes="Bold" />
+                    <CollectionView ItemsSource="{Binding Bestellingen}"
+                                    MinimumHeightRequest="150"
+                                    MaximumHeightRequest="300">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Bestelling">
+                                <Grid Padding="10" ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10" RowSpacing="5">
+                                    <Label Grid.Column="0" 
+                                           Text="{Binding Datum, StringFormat='{0:HH:mm:ss}'}" 
+                                           VerticalOptions="Center"
+                                           FontSize="16"/>
+                                    <Label Grid.Column="1" 
+                                           Text="{Binding Totaal, StringFormat='€{0:N2}'}" 
+                                           VerticalOptions="Center"
+                                           FontSize="16"
+                                           FontAttributes="Bold"/>
+                                    <Button Grid.Column="2" 
+                                            Text="Verwijderen" 
+                                            BackgroundColor="Red" 
+                                            TextColor="White"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:BestellingViewModel}}, Path=DeleteBestellingCommand}" 
+                                            CommandParameter="{Binding .}"
+                                            HeightRequest="44"
+                                            MinimumWidthRequest="100"/>
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Nieuwe Bestelling -->
+            <Frame Padding="15" CornerRadius="10" BorderColor="LightGray" HasShadow="True">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Nieuwe Bestelling" 
+                           FontSize="20" 
+                           FontAttributes="Bold" />
+                    <Label Text="Kies eerst een klant, daarna een boek, en klik vervolgens op 'Voeg toe'" 
+                           FontSize="14"
+                           TextColor="Gray"
+                           Margin="0,0,0,5"/>
+                    <Label Text="Klant" FontAttributes="Bold" FontSize="16"/>
+                    <Picker ItemsSource="{Binding Klanten}" 
+                            ItemDisplayBinding="{Binding Naam}" 
+                            SelectedItem="{Binding SelectedKlantForOrder}" 
+                            Title="Selecteer een klant"
+                            HeightRequest="48"
+                            FontSize="16" />
+                    <Label Text="Boek" FontAttributes="Bold" FontSize="16"/>
+                    <Picker ItemsSource="{Binding Boeken}" 
+                            ItemDisplayBinding="{Binding Titel}" 
+                            SelectedItem="{Binding SelectedBoekForOrder}" 
+                            Title="Selecteer een boek"
+                            HeightRequest="48"
+                            FontSize="16" />
+                    <Button Text="Voeg toe aan winkelmandje" 
+                            Command="{Binding AddToWinkelmandjeCommand}"
+                            BackgroundColor="BlueViolet"
+                            TextColor="White"
+                            HeightRequest="48"
+                            FontSize="16"
+                            Margin="0,5,0,10" />
+                    <Label Text="Winkelmandje" 
+                           FontAttributes="Bold" 
+                           FontSize="18"
+                           IsVisible="{Binding Winkelmandje.Count, Converter={StaticResource CountToBoolConverter}}" />
+                    <CollectionView ItemsSource="{Binding Winkelmandje}" 
+                                    IsVisible="{Binding Winkelmandje.Count, Converter={StaticResource CountToBoolConverter}}"
+                                    MinimumHeightRequest="100"
+                                    MaximumHeightRequest="250">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Boek">
+                                <Grid Padding="8" ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10" RowSpacing="5">
+                                    <Label Grid.Column="0" 
+                                           Text="{Binding Titel}" 
+                                           VerticalOptions="Center"
+                                           FontSize="16"/>
+                                    <Label Grid.Column="1" 
+                                           Text="{Binding Prijs, StringFormat='€{0:N2}'}" 
+                                           VerticalOptions="Center"
+                                           FontSize="16"
+                                           FontAttributes="Bold"/>
+                                    <Button Grid.Column="2" 
+                                            Text="X" 
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:BestellingViewModel}}, Path=RemoveFromWinkelmandjeCommand}" 
+                                            CommandParameter="{Binding .}" 
+                                            FontSize="18" 
+                                            HeightRequest="44" 
+                                            WidthRequest="44"
+                                            BackgroundColor="Red"
+                                            TextColor="White"
+                                            CornerRadius="22" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                    <Label Text="{Binding TotaalWinkelmandje, StringFormat='Totaal: €{0:N2}'}" 
+                           IsVisible="{Binding Winkelmandje.Count, Converter={StaticResource CountToBoolConverter}}" 
+                           HorizontalOptions="End" 
+                           FontAttributes="Bold"
+                           FontSize="18"
+                           Margin="0,5,0,10" />
+                    <HorizontalStackLayout Spacing="10" Margin="0,10,0,0">
+                        <Button Text="Bestel" 
+                                Command="{Binding PlaatsBestellingCommand}" 
+                                IsEnabled="{Binding Winkelmandje.Count, Converter={StaticResource CountToBoolConverter}}" 
+                                HorizontalOptions="FillAndExpand" 
+                                BackgroundColor="Green"
+                                TextColor="White"
+                                HeightRequest="48"
+                                FontSize="16"
+                                FontAttributes="Bold"/>
+                        <Button Text="Annuleer" 
+                                Command="{Binding ClearWinkelmandjeCommand}"
+                                HorizontalOptions="FillAndExpand" 
+                                BackgroundColor="Gray"
+                                TextColor="White"
+                                HeightRequest="48"
+                                FontSize="16"/>
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="BestelApp.Backend/BestelApp.Backend.csproj">
+    <BuildDependency Project="BestelApp/BestelApp.csproj" />
+  </Project>
+  <Project Path="BestelApp.Shared/BestelApp.Shared.csproj" />
+  <Project Path="BestelApp/BestelApp.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+</Solution>

@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend API",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-backend",
+      "program": "${workspaceFolder}/BestelApp.Backend/bin/Debug/net9.0/BestelApp.Backend.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/BestelApp.Backend",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5179"
+      },
+      "sourceFileMap": {
+        "/Views": "${workspaceFolder}/Views"
+      }
+    },
+    {
+      "name": "MAUI Windows",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-maui-windows",
+      "program": "${workspaceFolder}/BestelApp/bin/Debug/net9.0-windows10.0.19041.0/win10-x64/BestelApp.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/BestelApp",
+      "stopAtEntry": false
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Backend + MAUI Windows",
+      "configurations": ["Backend API", "MAUI Windows"],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "BestelApp",
+        "order": 1
+      }
+    }
+  ]
+}
