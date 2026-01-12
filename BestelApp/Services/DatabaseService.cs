@@ -74,9 +74,24 @@ namespace BestelApp.Services
         public async Task<List<Bestelling>> GetBestellingenAsync()
         {
             var bestellingen = await _database.Table<Bestelling>().OrderByDescending(b => b.Datum).ToListAsync();
+            var klanten = await _database.Table<Klant>().ToListAsync();
+            var boeken = await _database.Table<Boek>().ToListAsync();
+            
             foreach (var bestelling in bestellingen)
             {
+                // Haal items op
                 bestelling.Items = await _database.Table<BestellingItem>().Where(i => i.BestellingId == bestelling.Id).ToListAsync();
+                
+                // Vul KlantNaam in
+                var klant = klanten.FirstOrDefault(k => k.Id == bestelling.KlantId);
+                bestelling.KlantNaam = klant?.Naam ?? "Onbekende klant";
+                
+                // Vul BoekTitel in voor elk item
+                foreach (var item in bestelling.Items)
+                {
+                    var boek = boeken.FirstOrDefault(b => b.Id == item.BoekId);
+                    item.BoekTitel = boek?.Titel ?? "Onbekend boek";
+                }
             }
             return bestellingen;
         }

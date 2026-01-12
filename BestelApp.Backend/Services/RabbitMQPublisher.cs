@@ -6,47 +6,55 @@ using System.Text.Json;
 namespace BestelApp.Backend.Services
 {
     /// <summary>
-    /// Queue names for different message types
+    /// Queue namen voor verschillende berichttypen
     /// </summary>
     public static class QueueNames
     {
-        public const string Orders = "salesforce_orders";           // Nieuwe bestellingen
-        public const string OrderUpdates = "order_updates";         // Order status updates
-        public const string OrderDeletes = "order_deletes";         // Verwijderde bestellingen
-        public const string CustomerSync = "customer_sync";         // Klant synchronisatie
-        public const string InventoryUpdates = "inventory_updates"; // Voorraad updates
-        public const string Notifications = "notifications";         // Algemene notificaties
-        public const string AuditLog = "audit_log";                  // Audit logging
+        public const string Bestellingen = "bestellingen";              // Nieuwe bestellingen
+        public const string BestellingUpdates = "bestelling_updates";   // Bestelling status updates
+        public const string BestellingVerwijderd = "bestelling_verwijderd"; // Verwijderde bestellingen
+        public const string KlantSynchronisatie = "klant_synchronisatie";   // Klant synchronisatie
+        public const string VoorraadUpdates = "voorraad_updates";       // Voorraad updates
+        public const string Meldingen = "meldingen";                    // Algemene meldingen
+        public const string AuditLog = "audit_log";                     // Audit logging
     }
 
     /// <summary>
-    /// Message types for routing
+    /// Berichttypen voor routering
     /// </summary>
-    public enum MessageType
+    public enum BerichtType
     {
-        OrderCreated,
-        OrderUpdated,
-        OrderDeleted,
-        OrderShipped,
-        OrderDelivered,
-        CustomerCreated,
-        CustomerUpdated,
-        CustomerDeleted,
-        InventoryLow,
-        InventoryRestocked,
-        NotificationSent,
-        AuditEntry
+        BestellingAangemaakt,
+        BestellingBijgewerkt,
+        BestellingVerwijderd,
+        BestellingVerzonden,
+        BestellingAfgeleverd,
+        KlantAangemaakt,
+        KlantBijgewerkt,
+        KlantVerwijderd,
+        VoorraadLaag,
+        VoorraadAangevuld,
+        MeldingVerstuurd,
+        AuditLogItem
     }
 
     /// <summary>
-    /// Interface for RabbitMQ publishing to multiple queues
+    /// Interface voor RabbitMQ publishing naar meerdere queues
     /// </summary>
     public interface IRabbitMQPublisher
     {
-        Task<string> PublishToSalesforceAsync(Bestelling order);
+        Task<string> PublishToSalesforceAsync(Bestelling bestelling);
+        Task<string> PubliceerBestellingUpdateAsync(int bestellingId, string status, string bericht);
+        Task<string> PubliceerBestellingVerwijderdAsync(int bestellingId, string reden);
+        Task<string> PubliceerKlantSyncAsync(Klant klant, BerichtType berichtType);
+        Task<string> PubliceerVoorraadUpdateAsync(int boekId, string titel, int aantal, bool isVoorraadLaag);
+        Task<string> PubliceerMeldingAsync(string titel, string bericht, string ontvanger);
+        Task<string> PubliceerAuditLogAsync(string actie, string entiteit, int entiteitId, string gebruikerId, object details);
+        
+        // Aliassen voor backwards compatibility
         Task<string> PublishOrderUpdateAsync(int orderId, string status, string message);
         Task<string> PublishOrderDeleteAsync(int orderId, string reason);
-        Task<string> PublishCustomerSyncAsync(Klant customer, MessageType messageType);
+        Task<string> PublishCustomerSyncAsync(Klant customer, BerichtType messageType);
         Task<string> PublishInventoryUpdateAsync(int boekId, string titel, int quantity, bool isLowStock);
         Task<string> PublishNotificationAsync(string title, string message, string recipient);
         Task<string> PublishAuditLogAsync(string action, string entity, int entityId, string userId, object details);
@@ -72,185 +80,210 @@ namespace BestelApp.Backend.Services
             };
         }
 
-        #region Order Messages
+        #region Bestelling Berichten
 
         /// <summary>
-        /// Publish new order to Salesforce queue
+        /// Publiceer nieuwe bestelling naar Salesforce queue
         /// </summary>
-        public async Task<string> PublishToSalesforceAsync(Bestelling order)
+        public async Task<string> PublishToSalesforceAsync(Bestelling bestelling)
         {
-            var message = new
+            var bericht = new
             {
-                MessageType = MessageType.OrderCreated.ToString(),
-                OrderId = order.Id,
-                KlantId = order.KlantId,
-                KlantNaam = order.KlantNaam,
-                Datum = order.Datum,
-                Totaal = order.Totaal,
-                Items = order.Items.Select(item => new
+                BerichtType = BerichtType.BestellingAangemaakt.ToString(),
+                BestellingId = bestelling.Id,
+                KlantId = bestelling.KlantId,
+                KlantNaam = bestelling.KlantNaam,
+                Datum = bestelling.Datum,
+                Totaal = bestelling.Totaal,
+                Artikelen = bestelling.Items.Select(item => new
                 {
                     BoekId = item.BoekId,
                     BoekTitel = item.BoekTitel,
                     Aantal = item.Aantal,
                     Prijs = item.Prijs
                 }),
-                Timestamp = DateTime.UtcNow
+                Tijdstempel = DateTime.UtcNow
             };
 
-            return await PublishMessageAsync(QueueNames.Orders, message, $"Order {order.Id} created");
+            return await PubliceerBerichtAsync(QueueNames.Bestellingen, bericht, $"Bestelling {bestelling.Id} aangemaakt");
         }
 
         /// <summary>
-        /// Publish order status update
+        /// Publiceer bestelling status update
         /// </summary>
-        public async Task<string> PublishOrderUpdateAsync(int orderId, string status, string message)
+        public async Task<string> PubliceerBestellingUpdateAsync(int bestellingId, string status, string bericht)
         {
-            var updateMessage = new
+            var updateBericht = new
             {
-                MessageType = MessageType.OrderUpdated.ToString(),
-                OrderId = orderId,
+                BerichtType = BerichtType.BestellingBijgewerkt.ToString(),
+                BestellingId = bestellingId,
                 Status = status,
-                Message = message,
-                Timestamp = DateTime.UtcNow
+                Bericht = bericht,
+                Tijdstempel = DateTime.UtcNow
             };
 
-            return await PublishMessageAsync(QueueNames.OrderUpdates, updateMessage, $"Order {orderId} updated to {status}");
+            return await PubliceerBerichtAsync(QueueNames.BestellingUpdates, updateBericht, $"Bestelling {bestellingId} bijgewerkt naar {status}");
         }
 
         /// <summary>
-        /// Publish order deletion
+        /// Publiceer bestelling verwijdering
         /// </summary>
-        public async Task<string> PublishOrderDeleteAsync(int orderId, string reason)
+        public async Task<string> PubliceerBestellingVerwijderdAsync(int bestellingId, string reden)
         {
-            var deleteMessage = new
+            var verwijderBericht = new
             {
-                MessageType = MessageType.OrderDeleted.ToString(),
-                OrderId = orderId,
-                Reason = reason,
-                DeletedAt = DateTime.UtcNow,
-                Timestamp = DateTime.UtcNow
+                BerichtType = BerichtType.BestellingVerwijderd.ToString(),
+                BestellingId = bestellingId,
+                Reden = reden,
+                VerwijderdOp = DateTime.UtcNow,
+                Tijdstempel = DateTime.UtcNow
             };
 
-            return await PublishMessageAsync(QueueNames.OrderDeletes, deleteMessage, $"Order {orderId} deleted");
-        }
-
-        #endregion
-
-        #region Customer Messages
-
-        /// <summary>
-        /// Publish customer synchronization message
-        /// </summary>
-        public async Task<string> PublishCustomerSyncAsync(Klant customer, MessageType messageType)
-        {
-            var customerMessage = new
-            {
-                MessageType = messageType.ToString(),
-                CustomerId = customer.Id,
-                Naam = customer.Naam,
-                Email = customer.Email,
-                Timestamp = DateTime.UtcNow
-            };
-
-            return await PublishMessageAsync(QueueNames.CustomerSync, customerMessage, $"Customer {customer.Id} {messageType}");
+            return await PubliceerBerichtAsync(QueueNames.BestellingVerwijderd, verwijderBericht, $"Bestelling {bestellingId} verwijderd");
         }
 
         #endregion
 
-        #region Inventory Messages
+        #region Klant Berichten
 
         /// <summary>
-        /// Publish inventory update message
+        /// Publiceer klant synchronisatie bericht
         /// </summary>
-        public async Task<string> PublishInventoryUpdateAsync(int boekId, string titel, int quantity, bool isLowStock)
+        public async Task<string> PubliceerKlantSyncAsync(Klant klant, BerichtType berichtType)
         {
-            var inventoryMessage = new
+            var klantBericht = new
             {
-                MessageType = isLowStock ? MessageType.InventoryLow.ToString() : MessageType.InventoryRestocked.ToString(),
+                BerichtType = berichtType.ToString(),
+                KlantId = klant.Id,
+                Naam = klant.Naam,
+                Email = klant.Email,
+                Tijdstempel = DateTime.UtcNow
+            };
+
+            return await PubliceerBerichtAsync(QueueNames.KlantSynchronisatie, klantBericht, $"Klant {klant.Id} {berichtType}");
+        }
+
+        #endregion
+
+        #region Voorraad Berichten
+
+        /// <summary>
+        /// Publiceer voorraad update bericht
+        /// </summary>
+        public async Task<string> PubliceerVoorraadUpdateAsync(int boekId, string titel, int aantal, bool isVoorraadLaag)
+        {
+            var voorraadBericht = new
+            {
+                BerichtType = isVoorraadLaag ? BerichtType.VoorraadLaag.ToString() : BerichtType.VoorraadAangevuld.ToString(),
                 BoekId = boekId,
                 Titel = titel,
-                Quantity = quantity,
-                IsLowStock = isLowStock,
-                AlertLevel = isLowStock ? "Warning" : "Info",
-                Timestamp = DateTime.UtcNow
+                Aantal = aantal,
+                IsVoorraadLaag = isVoorraadLaag,
+                AlertNiveau = isVoorraadLaag ? "Waarschuwing" : "Informatie",
+                Tijdstempel = DateTime.UtcNow
             };
 
-            return await PublishMessageAsync(QueueNames.InventoryUpdates, inventoryMessage, $"Inventory update for book {boekId}");
+            return await PubliceerBerichtAsync(QueueNames.VoorraadUpdates, voorraadBericht, $"Voorraad update voor boek {boekId}");
         }
 
         #endregion
 
-        #region Notification Messages
+        #region Melding Berichten
 
         /// <summary>
-        /// Publish general notification
+        /// Publiceer algemene melding
         /// </summary>
-        public async Task<string> PublishNotificationAsync(string title, string message, string recipient)
+        public async Task<string> PubliceerMeldingAsync(string titel, string bericht, string ontvanger)
         {
-            var notificationMessage = new
+            var meldingBericht = new
             {
-                MessageType = MessageType.NotificationSent.ToString(),
-                Title = title,
-                Message = message,
-                Recipient = recipient,
-                SentAt = DateTime.UtcNow,
-                Timestamp = DateTime.UtcNow
+                BerichtType = BerichtType.MeldingVerstuurd.ToString(),
+                Titel = titel,
+                Bericht = bericht,
+                Ontvanger = ontvanger,
+                VerstuurdOp = DateTime.UtcNow,
+                Tijdstempel = DateTime.UtcNow
             };
 
-            return await PublishMessageAsync(QueueNames.Notifications, notificationMessage, $"Notification sent to {recipient}");
+            return await PubliceerBerichtAsync(QueueNames.Meldingen, meldingBericht, $"Melding verstuurd naar {ontvanger}");
         }
 
         #endregion
 
-        #region Audit Messages
+        #region Audit Berichten
 
         /// <summary>
-        /// Publish audit log entry
+        /// Publiceer audit log item
         /// </summary>
-        public async Task<string> PublishAuditLogAsync(string action, string entity, int entityId, string userId, object details)
+        public async Task<string> PubliceerAuditLogAsync(string actie, string entiteit, int entiteitId, string gebruikerId, object details)
         {
-            var auditMessage = new
+            var auditBericht = new
             {
-                MessageType = MessageType.AuditEntry.ToString(),
-                Action = action,
-                Entity = entity,
-                EntityId = entityId,
-                UserId = userId,
+                BerichtType = BerichtType.AuditLogItem.ToString(),
+                Actie = actie,
+                Entiteit = entiteit,
+                EntiteitId = entiteitId,
+                GebruikerId = gebruikerId,
                 Details = details,
-                Timestamp = DateTime.UtcNow
+                Tijdstempel = DateTime.UtcNow
             };
 
-            return await PublishMessageAsync(QueueNames.AuditLog, auditMessage, $"Audit: {action} on {entity} {entityId}");
+            return await PubliceerBerichtAsync(QueueNames.AuditLog, auditBericht, $"Audit: {actie} op {entiteit} {entiteitId}");
         }
 
         #endregion
 
-        #region Private Helper Methods
+        #region Backwards Compatibility Aliassen
+
+        // Deze methodes roepen de Nederlandse versies aan voor backwards compatibility
+        public Task<string> PublishOrderUpdateAsync(int orderId, string status, string message) 
+            => PubliceerBestellingUpdateAsync(orderId, status, message);
+
+        public Task<string> PublishOrderDeleteAsync(int orderId, string reason) 
+            => PubliceerBestellingVerwijderdAsync(orderId, reason);
+
+        public Task<string> PublishCustomerSyncAsync(Klant customer, BerichtType messageType) 
+            => PubliceerKlantSyncAsync(customer, messageType);
+
+        public Task<string> PublishInventoryUpdateAsync(int boekId, string titel, int quantity, bool isLowStock) 
+            => PubliceerVoorraadUpdateAsync(boekId, titel, quantity, isLowStock);
+
+        public Task<string> PublishNotificationAsync(string title, string message, string recipient) 
+            => PubliceerMeldingAsync(title, message, recipient);
+
+        public Task<string> PublishAuditLogAsync(string action, string entity, int entityId, string userId, object details) 
+            => PubliceerAuditLogAsync(action, entity, entityId, userId, details);
+
+        #endregion
+
+        #region Private Helper Methodes
 
         /// <summary>
-        /// Generic method to publish messages to any queue
+        /// Generieke methode om berichten naar een queue te publiceren
         /// </summary>
-        private async Task<string> PublishMessageAsync(string queueName, object message, string logDescription)
+        private async Task<string> PubliceerBerichtAsync(string queueNaam, object bericht, string logBeschrijving)
         {
             try
             {
                 var connection = await _factory.CreateConnectionAsync();
                 var channel = await connection.CreateChannelAsync();
 
-                // Declare queue (idempotent operation)
+                // Declareer queue (idempotente operatie)
                 await channel.QueueDeclareAsync(
-                    queue: queueName,
+                    queue: queueNaam,
                     durable: true,
                     exclusive: false,
                     autoDelete: false,
                     arguments: null
                 );
 
-                var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message, new JsonSerializerOptions
+                var jsonBericht = JsonSerializer.Serialize(bericht, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    WriteIndented = false
-                }));
+                    WriteIndented = true
+                });
+
+                var body = Encoding.UTF8.GetBytes(jsonBericht);
 
                 var properties = new BasicProperties
                 {
@@ -262,14 +295,16 @@ namespace BestelApp.Backend.Services
 
                 await channel.BasicPublishAsync(
                     exchange: "",
-                    routingKey: queueName,
+                    routingKey: queueNaam,
                     mandatory: false,
                     basicProperties: properties,
                     body: body
                 );
 
                 var trackingId = properties.MessageId;
-                _logger.LogInformation($"{logDescription}. Queue: {queueName}, Tracking ID: {trackingId}");
+                
+                // Mooie console output voor PowerShell
+                ToonConsoleOutput(queueNaam, trackingId, jsonBericht, logBeschrijving);
 
                 await channel.CloseAsync();
                 await connection.CloseAsync();
@@ -278,9 +313,66 @@ namespace BestelApp.Backend.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to publish message to {queueName}: {logDescription}");
+                _logger.LogError(ex, $"Kon bericht niet publiceren naar {queueNaam}: {logBeschrijving}");
+                Console.WriteLine();
+                Console.WriteLine("???????????????????????????????????????????????????????????????");
+                Console.WriteLine($"? FOUT: Kon bericht niet publiceren");
+                Console.WriteLine($"   Queue: {queueNaam}");
+                Console.WriteLine($"   Fout: {ex.Message}");
+                Console.WriteLine("???????????????????????????????????????????????????????????????");
+                Console.WriteLine();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Toont mooie console output voor berichten
+        /// </summary>
+        private void ToonConsoleOutput(string queueNaam, string trackingId, string jsonBericht, string beschrijving)
+        {
+            var tijdstempel = DateTime.Now.ToString("HH:mm:ss");
+            var queueIcon = GetQueueIcon(queueNaam);
+            
+            Console.WriteLine();
+            Console.WriteLine("???????????????????????????????????????????????????????????????");
+            Console.WriteLine($"{queueIcon} {beschrijving.ToUpper()}");
+            Console.WriteLine("???????????????????????????????????????????????????????????????");
+            Console.WriteLine($"   ?? Tijdstempel  : {tijdstempel}");
+            Console.WriteLine($"   ?? Queue        : {queueNaam}");
+            Console.WriteLine($"   ?? Tracking ID  : {trackingId}");
+            Console.WriteLine("???????????????????????????????????????????????????????????????");
+            Console.WriteLine("   ?? JSON Bericht:");
+            Console.WriteLine();
+            
+            // Toon JSON met indentatie
+            foreach (var line in jsonBericht.Split('\n'))
+            {
+                Console.WriteLine($"      {line.TrimEnd()}");
+            }
+            
+            Console.WriteLine();
+            Console.WriteLine("???????????????????????????????????????????????????????????????");
+            Console.WriteLine();
+            
+            _logger.LogInformation($"{beschrijving}. Queue: {queueNaam}, Tracking ID: {trackingId}");
+        }
+
+        /// <summary>
+        /// Geeft een icon terug op basis van queue naam
+        /// </summary>
+        private string GetQueueIcon(string queueNaam)
+        {
+            return queueNaam switch
+            {
+                "bestellingen" => "? BESTELLING GEPLAATST!",
+                "bestelling_updates" => "?? BESTELLING BIJGEWERKT",
+                "bestelling_verwijderd" => "??? BESTELLING VERWIJDERD",
+                "klant_synchronisatie" => "?? KLANT GESYNCHRONISEERD",
+                "voorraad_updates" => "?? VOORRAAD UPDATE",
+                "meldingen" => "?? MELDING VERSTUURD",
+                "audit_log" => "?? AUDIT LOG",
+                _ => "?? BERICHT GEPUBLICEERD"
+            };
         }
 
         #endregion

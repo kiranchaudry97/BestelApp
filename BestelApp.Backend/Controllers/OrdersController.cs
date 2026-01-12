@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BestelApp.Backend.Controllers
 {
+    /// <summary>
+    /// Controller voor bestelling beheer met RabbitMQ en SAP integratie
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class OrdersController : ControllerBase
@@ -26,47 +29,45 @@ namespace BestelApp.Backend.Controllers
         }
 
         /// <summary>
-        /// Places an order - handles parallel processing to RabbitMQ/Salesforce and SAP
+        /// Plaatst een bestelling - verwerkt parallel naar RabbitMQ/Salesforce en SAP
         /// </summary>
-        /// <param name="request">Order request with API key and order details</param>
-        /// <returns>Combined response with Salesforce ID and SAP status</returns>
         [HttpPost]
         [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<ActionResult<OrderResponse>> PlaceOrder([FromBody] OrderRequest request)
+        public async Task<ActionResult<OrderResponse>> PlaatsBestelling([FromBody] OrderRequest request)
         {
             try
             {
-                _logger.LogInformation($"Received order request. RequestId: {request.RequestId}");
+                _logger.LogInformation($"Bestelling ontvangen. RequestId: {request.RequestId}");
 
-                // Step 1: Validate API Key (GDPR compliance)
+                // Stap 1: Valideer API Key (GDPR compliance)
                 if (!_apiKeyValidator.Validate(request.ApiKey))
                 {
-                    _logger.LogWarning($"Unauthorized order attempt. RequestId: {request.RequestId}");
-                    return Unauthorized(new { message = _apiKeyValidator.GetValidationError(request.ApiKey) });
+                    _logger.LogWarning($"Ongeautoriseerde bestelling poging. RequestId: {request.RequestId}");
+                    return Unauthorized(new { bericht = _apiKeyValidator.GetValidationError(request.ApiKey) });
                 }
 
-                // Step 2: Validate order data
-                if (!ValidateOrder(request.Order))
+                // Stap 2: Valideer bestelling data
+                if (!ValideerBestelling(request.Order))
                 {
-                    _logger.LogWarning($"Invalid order data. RequestId: {request.RequestId}");
-                    return BadRequest(new { message = "Invalid order data. Check required fields." });
+                    _logger.LogWarning($"Ongeldige bestelling data. RequestId: {request.RequestId}");
+                    return BadRequest(new { bericht = "Ongeldige bestelling data. Controleer verplichte velden." });
                 }
 
-                _logger.LogInformation($"Processing order {request.Order.Id}. RequestId: {request.RequestId}");
+                _logger.LogInformation($"Verwerken bestelling {request.Order.Id}. RequestId: {request.RequestId}");
 
-                // Step 3: Parallel processing - RabbitMQ (? Salesforce) and SAP iDoc
+                // Stap 3: Parallelle verwerking - RabbitMQ (? Salesforce) en SAP iDoc
                 var rabbitTask = _rabbitMQPublisher.PublishToSalesforceAsync(request.Order);
                 var sapTask = _sapService.SendIDocAsync(request.Order);
 
-                // Wait for both to complete
+                // Wacht op beide taken
                 await Task.WhenAll(rabbitTask, sapTask);
 
                 var salesforceTrackingId = await rabbitTask;
                 var sapResponse = await sapTask;
 
-                // Step 4: Create combined response
+                // Stap 4: Maak gecombineerde response
                 var response = new OrderResponse
                 {
                     SalesforceOrderId = salesforceTrackingId,
@@ -74,41 +75,71 @@ namespace BestelApp.Backend.Controllers
                     SapStatus = sapResponse.Status,
                     IsSuccess = sapResponse.IsSuccess,
                     StockCode = sapResponse.StockCode,
-                    StatusMessage = GetStatusMessage(sapResponse.Status),
+                    StatusMessage = GetStatusBericht(sapResponse.Status),
                     ResponseDateTime = DateTime.UtcNow,
                     ErrorMessage = sapResponse.ErrorMessage
                 };
 
-                _logger.LogInformation($"Order {request.Order.Id} processed successfully. " +
+                // Mooie console output voor SAP response
+                ToonSapResponseConsole(request.Order, salesforceTrackingId, sapResponse);
+
+                _logger.LogInformation($"Bestelling {request.Order.Id} succesvol verwerkt. " +
                     $"Salesforce Tracking: {salesforceTrackingId}, SAP Doc: {sapResponse.DocumentNumber}, SAP Status: {sapResponse.Status}");
 
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error processing order. RequestId: {request?.RequestId}");
+                _logger.LogError(ex, $"Fout bij verwerken bestelling. RequestId: {request?.RequestId}");
                 
                 return StatusCode(500, new OrderResponse
                 {
                     IsSuccess = false,
-                    ErrorMessage = "Internal server error processing order",
+                    ErrorMessage = "Interne server fout bij verwerken bestelling",
                     ResponseDateTime = DateTime.UtcNow
                 });
             }
         }
 
         /// <summary>
-        /// Validates order data
+        /// Toont mooie SAP response in console
         /// </summary>
-        private bool ValidateOrder(Bestelling order)
+        private void ToonSapResponseConsole(Bestelling bestelling, string salesforceId, SapResponse sapResponse)
         {
-            if (order == null) return false;
-            if (order.KlantId <= 0) return false;
-            if (order.Totaal <= 0) return false;
-            if (order.Items == null || order.Items.Count == 0) return false;
+            var statusIcon = sapResponse.Status == 53 ? "?" : (sapResponse.Status == 51 ? "?" : "?");
+            var statusTekst = GetStatusBericht(sapResponse.Status);
             
-            // Validate all items
-            foreach (var item in order.Items)
+            Console.WriteLine();
+            Console.WriteLine("?????????????????????????????????????????????????????????????????");
+            Console.WriteLine("?           ?? SAP iDOC RESPONSE ONTVANGEN                      ?");
+            Console.WriteLine("?????????????????????????????????????????????????????????????????");
+            Console.WriteLine($"?  {statusIcon} Status: {sapResponse.Status} - {(sapResponse.IsSuccess ? "SUCCESVOL" : "FOUT")}");
+            Console.WriteLine("?????????????????????????????????????????????????????????????????");
+            Console.WriteLine($"?  ?? Bestelling ID    : {bestelling.Id}");
+            Console.WriteLine($"?  ?? Klant            : {bestelling.KlantNaam}");
+            Console.WriteLine($"?  ?? Totaal           : €{bestelling.Totaal:N2}");
+            Console.WriteLine("?????????????????????????????????????????????????????????????????");
+            Console.WriteLine($"?  ?? Salesforce ID    : {salesforceId}");
+            Console.WriteLine($"?  ?? SAP Document     : {sapResponse.DocumentNumber}");
+            Console.WriteLine($"?  ?? SAP Status       : {sapResponse.Status} - {statusTekst}");
+            Console.WriteLine($"?  ?? Voorraad Code    : {sapResponse.StockCode}");
+            Console.WriteLine("?????????????????????????????????????????????????????????????????");
+            Console.WriteLine();
+        }
+
+
+        /// <summary>
+        /// Valideert bestelling data
+        /// </summary>
+        private bool ValideerBestelling(Bestelling bestelling)
+        {
+            if (bestelling == null) return false;
+            if (bestelling.KlantId <= 0) return false;
+            if (bestelling.Totaal <= 0) return false;
+            if (bestelling.Items == null || bestelling.Items.Count == 0) return false;
+            
+            // Valideer alle items
+            foreach (var item in bestelling.Items)
             {
                 if (item.BoekId <= 0 || item.Aantal <= 0 || item.Prijs <= 0)
                     return false;
@@ -118,16 +149,16 @@ namespace BestelApp.Backend.Controllers
         }
 
         /// <summary>
-        /// Converts SAP status code to human-readable message
+        /// Converteert SAP status code naar leesbaar bericht
         /// </summary>
-        private string GetStatusMessage(int sapStatus)
+        private string GetStatusBericht(int sapStatus)
         {
             return sapStatus switch
             {
-                53 => "Order successfully processed in both systems",
-                51 => "SAP processing error",
-                64 => "Order ready for processing in SAP",
-                _ => $"Unknown SAP status: {sapStatus}"
+                53 => "Bestelling succesvol verwerkt in beide systemen",
+                51 => "SAP verwerkingsfout",
+                64 => "Bestelling klaar voor verwerking in SAP",
+                _ => $"Onbekende SAP status: {sapStatus}"
             };
         }
 
@@ -137,7 +168,46 @@ namespace BestelApp.Backend.Controllers
         [HttpGet("health")]
         public IActionResult HealthCheck()
         {
-            return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+            return Ok(new { status = "gezond", tijdstempel = DateTime.UtcNow });
+        }
+
+        /// <summary>
+        /// Verwijdert een bestelling en publiceert naar RabbitMQ bestelling_verwijderd queue
+        /// </summary>
+        [HttpDelete("{bestellingId}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> VerwijderBestelling(int bestellingId, [FromHeader(Name = "X-Api-Key")] string apiKey, [FromQuery] string reden = "Verwijderd door gebruiker")
+        {
+            try
+            {
+                _logger.LogInformation($"Verwijder verzoek ontvangen voor bestelling {bestellingId}");
+
+                // Valideer API Key
+                if (!_apiKeyValidator.Validate(apiKey))
+                {
+                    _logger.LogWarning($"Ongeautoriseerde verwijder poging voor bestelling {bestellingId}");
+                    return Unauthorized(new { bericht = "Ongeldige API key" });
+                }
+
+                // Publiceer verwijder bericht naar RabbitMQ
+                var trackingId = await _rabbitMQPublisher.PublishOrderDeleteAsync(bestellingId, reden);
+
+                _logger.LogInformation($"Bestelling {bestellingId} verwijdering gepubliceerd naar RabbitMQ. Tracking ID: {trackingId}");
+
+                return Ok(new 
+                { 
+                    succes = true, 
+                    bericht = $"Bestelling {bestellingId} succesvol verwijderd",
+                    trackingId = trackingId,
+                    tijdstempel = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Fout bij verwijderen bestelling {bestellingId}");
+                return StatusCode(500, new { succes = false, bericht = "Fout bij verwijderen bestelling" });
+            }
         }
     }
 }

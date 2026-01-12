@@ -9,12 +9,15 @@ using System;
 
 namespace BestelApp.ViewModels
 {
+    /// <summary>
+    /// ViewModel voor bestelling beheer met RabbitMQ synchronisatie
+    /// </summary>
     public partial class BestellingViewModel : ObservableObject
     {
         private readonly DatabaseService _databaseService;
         private readonly IOrderService _orderService;
 
-        // Properties for Order Management
+        // Eigenschappen voor Bestelling Beheer
         [ObservableProperty]
         private ObservableCollection<Bestelling> _bestellingen;
         [ObservableProperty]
@@ -26,7 +29,7 @@ namespace BestelApp.ViewModels
         [ObservableProperty]
         private decimal _totaalWinkelmandje;
 
-        // Properties for Customer Management
+        // Eigenschappen voor Klant Beheer
         [ObservableProperty]
         private ObservableCollection<Klant> _klanten;
         [ObservableProperty]
@@ -38,7 +41,7 @@ namespace BestelApp.ViewModels
         [ObservableProperty]
         private string _email = string.Empty;
 
-        // Order confirmation properties
+        // Bestelling bevestiging eigenschappen
         [ObservableProperty]
         private string _lastOrderStatus = string.Empty;
         [ObservableProperty]
@@ -97,18 +100,42 @@ namespace BestelApp.ViewModels
             foreach (var b in bestellingen) Bestellingen.Add(b);
         }
 
-        // --- Customer Management Commands ---
+        // --- Klant Beheer Commando's ---
         [RelayCommand]
         private async Task SaveKlant()
         {
             if (string.IsNullOrWhiteSpace(Naam) || string.IsNullOrWhiteSpace(Email))
                 return;
 
+            bool isNieuweKlant = SelectedKlantForEdit == null;
             Klant klantToSave = SelectedKlantForEdit ?? new Klant();
             klantToSave.Naam = Naam;
             klantToSave.Email = Email;
 
+            // 1. Opslaan in lokale SQLite database
             await _databaseService.SaveKlantAsync(klantToSave);
+
+            // 2. Synchroniseren naar backend/RabbitMQ
+            try
+            {
+                if (isNieuweKlant)
+                {
+                    var synced = await _orderService.SyncKlantAangemaaktAsync(klantToSave);
+                    if (synced)
+                        System.Diagnostics.Debug.WriteLine($"Klant {klantToSave.Naam} aangemaakt en gesynchroniseerd naar RabbitMQ");
+                }
+                else
+                {
+                    var synced = await _orderService.SyncKlantBijgewerktAsync(klantToSave);
+                    if (synced)
+                        System.Diagnostics.Debug.WriteLine($"Klant {klantToSave.Naam} bijgewerkt en gesynchroniseerd naar RabbitMQ");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Backend sync mislukt (lokaal wel opgeslagen): {ex.Message}");
+            }
+
             await LoadData();
             ClearKlantForm();
         }
@@ -118,6 +145,19 @@ namespace BestelApp.ViewModels
         {
             if (klant != null)
             {
+                // 1. Synchroniseren naar backend/RabbitMQ
+                try
+                {
+                    var synced = await _orderService.SyncKlantVerwijderdAsync(klant.Id, klant.Naam);
+                    if (synced)
+                        System.Diagnostics.Debug.WriteLine($"Klant {klant.Naam} verwijdering gesynchroniseerd naar RabbitMQ");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Backend sync mislukt: {ex.Message}");
+                }
+
+                // 2. Verwijderen uit lokale SQLite database
                 await _databaseService.DeleteKlantAsync(klant);
                 await LoadData();
             }
@@ -246,8 +286,33 @@ namespace BestelApp.ViewModels
         {
             if (bestelling != null)
             {
-                await _databaseService.DeleteBestellingAsync(bestelling);
-                await LoadData();
+                try
+                {
+                    // 1. Send delete to backend API (publishes to RabbitMQ order_deletes queue)
+                    var backendDeleted = await _orderService.DeleteOrderAsync(bestelling.Id, "Verwijderd door verkoper");
+                    
+                    if (backendDeleted)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Order {bestelling.Id} delete published to RabbitMQ");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Backend unavailable, order {bestelling.Id} only deleted locally");
+                    }
+
+                    // 2. Delete from local SQLite database
+                    await _databaseService.DeleteBestellingAsync(bestelling);
+                    
+                    // 3. Refresh the UI
+                    await LoadData();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error deleting order: {ex.Message}");
+                    // Still delete locally even if backend fails
+                    await _databaseService.DeleteBestellingAsync(bestelling);
+                    await LoadData();
+                }
             }
         }
     }

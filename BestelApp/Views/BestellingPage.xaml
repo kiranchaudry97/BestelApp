@@ -74,34 +74,67 @@
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Bestellingen" FontSize="20" FontAttributes="Bold" />
                     <CollectionView ItemsSource="{Binding Bestellingen}"
-                                    MinimumHeightRequest="150"
-                                    MaximumHeightRequest="300">
+                                    MinimumHeightRequest="200"
+                                    MaximumHeightRequest="400">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Bestelling">
-                                <Grid Padding="10" ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10" RowSpacing="5">
-                                    <Label Grid.Column="0" 
-                                           Text="{Binding Datum, StringFormat='{0:HH:mm:ss}'}" 
-                                           VerticalOptions="Center"
-                                           FontSize="16"/>
-                                    <Label Grid.Column="1" 
-                                           Text="{Binding Totaal, StringFormat='€{0:N2}'}" 
-                                           VerticalOptions="Center"
-                                           FontSize="16"
-                                           FontAttributes="Bold"/>
-                                    <Button Grid.Column="2" 
-                                            Text="Verwijderen" 
-                                            BackgroundColor="Red" 
-                                            TextColor="White"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:BestellingViewModel}}, Path=DeleteBestellingCommand}" 
-                                            CommandParameter="{Binding .}"
-                                            HeightRequest="44"
-                                            MinimumWidthRequest="100"/>
-                                </Grid>
+                                <Frame Padding="10" Margin="0,5" CornerRadius="8" BorderColor="LightGray" HasShadow="False">
+                                    <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="5" ColumnSpacing="10">
+                                        <!-- Regel 1: ID en Datum -->
+                                        <HorizontalStackLayout Grid.Row="0" Grid.Column="0" Spacing="10">
+                                            <Label Text="{Binding Id, StringFormat='#{0}'}" 
+                                                   FontSize="14" 
+                                                   FontAttributes="Bold"
+                                                   TextColor="BlueViolet"/>
+                                            <Label Text="{Binding Datum, StringFormat='{0:dd/MM/yyyy HH:mm}'}" 
+                                                   FontSize="14"
+                                                   TextColor="Gray"/>
+                                        </HorizontalStackLayout>
+                                        
+                                        <!-- Regel 2: Klant Naam -->
+                                        <HorizontalStackLayout Grid.Row="1" Grid.Column="0" Spacing="5">
+                                            <Label Text="Klant:" FontSize="14" TextColor="Gray"/>
+                                            <Label Text="{Binding KlantNaam}" 
+                                                   FontSize="14" 
+                                                   FontAttributes="Bold"/>
+                                        </HorizontalStackLayout>
+                                        
+                                        <!-- Regel 3: Boek Titels -->
+                                        <HorizontalStackLayout Grid.Row="2" Grid.Column="0" Spacing="5">
+                                            <Label Text="Boeken:" FontSize="14" TextColor="Gray"/>
+                                            <Label Text="{Binding BoekTitels}" 
+                                                   FontSize="14"
+                                                   LineBreakMode="TailTruncation"
+                                                   MaxLines="1"/>
+                                        </HorizontalStackLayout>
+                                        
+                                        <!-- Regel 4: Totaal -->
+                                        <Label Grid.Row="3" Grid.Column="0"
+                                               Text="{Binding Totaal, StringFormat='Totaal: €{0:N2}'}" 
+                                               FontSize="16"
+                                               FontAttributes="Bold"
+                                               TextColor="Green"/>
+                                        
+                                        <!-- Verwijder Button -->
+                                        <Button Grid.Row="0" Grid.RowSpan="4" Grid.Column="1" 
+                                                Text="X" 
+                                                BackgroundColor="Red" 
+                                                TextColor="White"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:BestellingViewModel}}, Path=DeleteBestellingCommand}" 
+                                                CommandParameter="{Binding .}"
+                                                HeightRequest="44"
+                                                WidthRequest="44"
+                                                CornerRadius="22"
+                                                VerticalOptions="Center"
+                                                FontSize="18"/>
+                                    </Grid>
+                                </Frame>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
                 </VerticalStackLayout>
             </Frame>
+
 
             <!-- Nieuwe Bestelling -->
             <Frame Padding="15" CornerRadius="10" BorderColor="LightGray" HasShadow="True">

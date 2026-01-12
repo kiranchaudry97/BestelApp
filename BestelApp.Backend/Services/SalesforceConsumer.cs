@@ -7,8 +7,8 @@ using System.Text.Json;
 namespace BestelApp.Backend.Services
 {
     /// <summary>
-    /// Background service that consumes orders from RabbitMQ and creates them in Salesforce
-    /// Implements loose coupling: Salesforce and MAUI app don't know each other directly
+    /// Achtergrond service die bestellingen consumeert van RabbitMQ en aanmaakt in Salesforce
+    /// Implementeert loose coupling: Salesforce en MAUI app kennen elkaar niet direct
     /// </summary>
     public class SalesforceConsumer : BackgroundService
     {
@@ -30,7 +30,7 @@ namespace BestelApp.Backend.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Salesforce Consumer started. Waiting for orders...");
+            _logger.LogInformation("Salesforce Consumer gestart. Wachten op bestellingen...");
 
             try
             {
@@ -42,55 +42,58 @@ namespace BestelApp.Backend.Services
                     try
                     {
                         var body = ea.Body.ToArray();
-                        var message = Encoding.UTF8.GetString(body);
+                        var bericht = Encoding.UTF8.GetString(body);
                         
-                        _logger.LogInformation($"Received order from queue: {message}");
+                        _logger.LogInformation($"Bestelling ontvangen van queue: {bericht}");
 
-                        // Deserialize order
-                        var order = JsonSerializer.Deserialize<Bestelling>(message);
-                        
-                        if (order != null)
+                        // Deserialiseer bestelling
+                        var bestelling = JsonSerializer.Deserialize<Bestelling>(bericht, new JsonSerializerOptions
                         {
-                            // Create order in Salesforce
+                            PropertyNameCaseInsensitive = true
+                        });
+                        
+                        if (bestelling != null)
+                        {
+                            // Maak bestelling aan in Salesforce
                             using var scope = _serviceProvider.CreateScope();
                             var salesforceService = scope.ServiceProvider.GetRequiredService<ISalesforceService>();
                             
-                            var salesforceId = await salesforceService.CreateOrderAsync(order);
+                            var salesforceId = await salesforceService.CreateOrderAsync(bestelling);
                             
                             if (!string.IsNullOrEmpty(salesforceId))
                             {
-                                _logger.LogInformation($"Order {order.Id} created in Salesforce with ID: {salesforceId}");
+                                _logger.LogInformation($"Bestelling {bestelling.Id} aangemaakt in Salesforce met ID: {salesforceId}");
                                 
-                                // Acknowledge message
+                                // Bevestig bericht
                                 await _channel.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                             }
                             else
                             {
-                                _logger.LogWarning($"Failed to create order {order.Id} in Salesforce. Rejecting message.");
-                                // Reject and requeue
+                                _logger.LogWarning($"Kon bestelling {bestelling.Id} niet aanmaken in Salesforce. Bericht wordt afgewezen.");
+                                // Afwijzen en opnieuw in queue plaatsen
                                 await _channel.BasicNackAsync(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error processing message from RabbitMQ");
-                        // Reject and requeue on error
+                        _logger.LogError(ex, "Fout bij verwerken bericht van RabbitMQ");
+                        // Afwijzen en opnieuw in queue plaatsen bij fout
                         await _channel.BasicNackAsync(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true);
                     }
                 };
 
-                var queueName = _configuration["RabbitMQ:QueueName"] ?? "salesforce_orders";
-                await _channel.BasicConsumeAsync(queue: queueName, autoAck: false, consumer: consumer);
+                // Gebruik de Nederlandse queue naam
+                await _channel.BasicConsumeAsync(queue: QueueNames.Bestellingen, autoAck: false, consumer: consumer);
 
-                _logger.LogInformation($"Consuming from queue: {queueName}");
+                _logger.LogInformation($"Consumeren van queue: {QueueNames.Bestellingen}");
 
-                // Keep service running
+                // Houd service draaiende
                 await Task.Delay(Timeout.Infinite, stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Fatal error in Salesforce Consumer");
+                _logger.LogError(ex, "Fatale fout in Salesforce Consumer");
             }
         }
 
@@ -107,17 +110,16 @@ namespace BestelApp.Backend.Services
             _connection = await factory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
 
-            var queueName = rabbitConfig["QueueName"] ?? "salesforce_orders";
-            
+            // Declareer de Nederlandse queue naam
             await _channel.QueueDeclareAsync(
-                queue: queueName,
+                queue: QueueNames.Bestellingen,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
                 arguments: null
             );
 
-            _logger.LogInformation($"Connected to RabbitMQ. Queue: {queueName}");
+            _logger.LogInformation($"Verbonden met RabbitMQ. Queue: {QueueNames.Bestellingen}");
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)

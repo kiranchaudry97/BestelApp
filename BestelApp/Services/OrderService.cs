@@ -174,5 +174,143 @@ namespace BestelApp.Services
                 _ => "Unknown status"
             };
         }
+
+        /// <summary>
+        /// Deletes an order via backend API (publishes to RabbitMQ order_deletes queue)
+        /// </summary>
+        public async Task<bool> DeleteOrderAsync(int orderId, string reason = "Verwijderd door gebruiker")
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"Deleting order {orderId} via backend API...");
+
+                // Create request with API key in header
+                var request = new HttpRequestMessage(HttpMethod.Delete, $"/orders/{orderId}?reason={Uri.EscapeDataString(reason)}");
+                request.Headers.Add("X-Api-Key", _config.ApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    System.Diagnostics.Debug.WriteLine($"Order {orderId} deleted successfully: {content}");
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete order {orderId}: {response.StatusCode} - {errorContent}");
+                    return false;
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HTTP error deleting order {orderId}: {ex.Message}");
+                // Backend unavailable - order will only be deleted locally
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error deleting order {orderId}: {ex.Message}");
+                return false;
+            }
+        }
+
+        #region Klant Synchronisatie Methodes
+
+        /// <summary>
+        /// Synchroniseert een nieuwe klant naar de backend/RabbitMQ
+        /// </summary>
+        public async Task<bool> SyncKlantAangemaaktAsync(Klant klant)
+        {
+            return await SyncKlantAsync(klant, "POST", "/klanten");
+        }
+
+        /// <summary>
+        /// Synchroniseert een bijgewerkte klant naar de backend/RabbitMQ
+        /// </summary>
+        public async Task<bool> SyncKlantBijgewerktAsync(Klant klant)
+        {
+            return await SyncKlantAsync(klant, "PUT", $"/klanten/{klant.Id}");
+        }
+
+        /// <summary>
+        /// Synchroniseert een verwijderde klant naar de backend/RabbitMQ
+        /// </summary>
+        public async Task<bool> SyncKlantVerwijderdAsync(int klantId, string naam)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"Synchroniseren klant verwijdering {klantId} naar backend...");
+
+                var request = new HttpRequestMessage(HttpMethod.Delete, $"/klanten/{klantId}?naam={Uri.EscapeDataString(naam)}");
+                request.Headers.Add("X-Api-Key", _config.ApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Klant {klantId} verwijdering gesynchroniseerd naar RabbitMQ");
+                    return true;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"Fout bij synchroniseren klant verwijdering: {response.StatusCode}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fout bij synchroniseren klant verwijdering: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Helper methode voor klant synchronisatie
+        /// </summary>
+        private async Task<bool> SyncKlantAsync(Klant klant, string method, string endpoint)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"Synchroniseren klant {klant.Id} naar backend ({method})...");
+
+                var syncRequest = new
+                {
+                    ApiKey = _config.ApiKey,
+                    Klant = klant
+                };
+
+                HttpResponseMessage response;
+
+                if (method == "POST")
+                {
+                    response = await _httpClient.PostAsJsonAsync(endpoint, syncRequest);
+                }
+                else
+                {
+                    response = await _httpClient.PutAsJsonAsync(endpoint, syncRequest);
+                }
+
+                if (response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Klant {klant.Id} gesynchroniseerd naar RabbitMQ");
+                    return true;
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    System.Diagnostics.Debug.WriteLine($"Fout bij synchroniseren klant: {response.StatusCode} - {error}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fout bij synchroniseren klant: {ex.Message}");
+                return false;
+            }
+        }
+
+        #endregion
     }
 }

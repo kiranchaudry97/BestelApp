@@ -21,5 +21,13 @@ namespace BestelApp.Shared.Models
 
         [Ignore]
         public List<BestellingItem> Items { get; set; } = new List<BestellingItem>();
+
+        /// <summary>
+        /// Samenvatting van boektitels voor weergave in UI
+        /// </summary>
+        [Ignore]
+        public string BoekTitels => Items != null && Items.Count > 0 
+            ? string.Join(", ", Items.Select(i => $"{i.BoekTitel} ({i.Aantal}x)"))
+            : "Geen boeken";
     }
 }
