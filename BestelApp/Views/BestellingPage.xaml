@@ -3,9 +3,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewModels="clr-namespace:BestelApp.ViewModels"
              xmlns:models="clr-namespace:BestelApp.Shared.Models;assembly=BestelApp.Shared"
+             xmlns:converters="clr-namespace:BestelApp.Converters"
              x:DataType="viewModels:BestellingViewModel"
              x:Class="BestelApp.Views.BestellingPage"
              Title="BestelApp">
+    
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:CountToBoolConverter x:Key="CountToBoolConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+    
     <ScrollView Padding="10,10,10,20">
         <VerticalStackLayout Spacing="15">
 

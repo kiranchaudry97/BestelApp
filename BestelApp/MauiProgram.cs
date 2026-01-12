@@ -40,9 +40,12 @@ namespace BestelApp
 
             var app = builder.Build();
 
-            // Initialize database
-            var dbService = app.Services.GetRequiredService<DatabaseService>();
-            dbService.Init().Wait(); // Using .Wait() for simplicity in startup, consider a better async pattern for production
+            // Initialize database asynchronously to prevent blocking
+            Task.Run(async () => 
+            {
+                var dbService = app.Services.GetRequiredService<DatabaseService>();
+                await dbService.Init();
+            });
 
             return app;
         }

@@ -55,7 +55,21 @@ namespace BestelApp.ViewModels
             Bestellingen = new ObservableCollection<Bestelling>();
             Winkelmandje = new ObservableCollection<Boek>();
 
-            LoadDataCommand.Execute(null);
+            // Load data asynchronously without blocking the constructor
+            _ = LoadDataAsync();
+        }
+
+        private async Task LoadDataAsync()
+        {
+            try
+            {
+                await Task.Delay(500); // Give time for database initialization
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading data: {ex.Message}");
+            }
         }
 
         partial void OnSelectedKlantForEditChanged(Klant value)
@@ -166,6 +180,7 @@ namespace BestelApp.ViewModels
                 var nieuweBestelling = new Bestelling
                 {
                     KlantId = SelectedKlantForOrder.Id,
+                    KlantNaam = SelectedKlantForOrder.Naam,
                     Datum = DateTime.Now,
                     Totaal = TotaalWinkelmandje
                 };
@@ -174,6 +189,7 @@ namespace BestelApp.ViewModels
                                          .Select(g => new BestellingItem
                                          {
                                              BoekId = g.Key,
+                                             BoekTitel = g.First().Titel,
                                              Aantal = g.Count(),
                                              Prijs = g.First().Prijs
                                          }).ToList();

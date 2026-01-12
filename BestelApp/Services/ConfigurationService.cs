@@ -7,22 +7,22 @@ namespace BestelApp.Services
 {
     public class AppConfiguration
     {
-        public string ApiKey { get; set; }
-        public string BackendApiUrl { get; set; }
-        public RabbitMQConfig RabbitMQ { get; set; }
+        public string ApiKey { get; set; } = string.Empty;
+        public string BackendApiUrl { get; set; } = string.Empty;
+        public RabbitMQConfig RabbitMQ { get; set; } = new();
     }
 
     public class RabbitMQConfig
     {
-        public string HostName { get; set; }
-        public string UserName { get; set; }
-        public string Password { get; set; }
-        public string QueueName { get; set; }
+        public string HostName { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string QueueName { get; set; } = string.Empty;
     }
 
     public class ConfigurationService
     {
-        private AppConfiguration _configuration;
+        private AppConfiguration _configuration = null!;
 
         public ConfigurationService()
         {
@@ -47,7 +47,7 @@ namespace BestelApp.Services
                 System.Diagnostics.Debug.WriteLine("Loading default configuration...");
 #endif
 
-                using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+                using (Stream? stream = assembly.GetManifestResourceStream(resourceName))
                 {
                     if (stream != null)
                     {
@@ -55,7 +55,7 @@ namespace BestelApp.Services
                         {
                             string json = reader.ReadToEnd();
                             var root = JsonSerializer.Deserialize<RootConfig>(json);
-                            _configuration = root?.AppSettings;
+                            _configuration = root?.AppSettings!;
                             
                             if (_configuration != null)
                             {
@@ -122,7 +122,7 @@ namespace BestelApp.Services
 
         private class RootConfig
         {
-            public AppConfiguration AppSettings { get; set; }
+            public AppConfiguration AppSettings { get; set; } = new();
         }
     }
 }

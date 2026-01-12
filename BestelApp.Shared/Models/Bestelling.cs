@@ -10,6 +10,12 @@ namespace BestelApp.Shared.Models
         [Indexed]
         public int KlantId { get; set; }
         
+        /// <summary>
+        /// Klantnaam voor weergave in berichten (niet opgeslagen in DB)
+        /// </summary>
+        [Ignore]
+        public string KlantNaam { get; set; } = string.Empty;
+        
         public DateTime Datum { get; set; }
         public decimal Totaal { get; set; }
 
