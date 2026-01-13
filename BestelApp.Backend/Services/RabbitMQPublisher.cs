@@ -1,4 +1,4 @@
-using BestelApp.Shared.Models;
+﻿using BestelApp.Shared.Models;
 using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
@@ -74,7 +74,7 @@ namespace BestelApp.Backend.Services
             var rabbitConfig = _configuration.GetSection("RabbitMQ");
             _factory = new ConnectionFactory
             {
-                HostName = rabbitConfig["HostName"] ?? "localhost",
+                HostName = rabbitConfig["HostName"] ?? "10.2.160.223",
                 UserName = rabbitConfig["UserName"] ?? "guest",
                 Password = rabbitConfig["Password"] ?? "guest"
             };
@@ -315,11 +315,11 @@ namespace BestelApp.Backend.Services
             {
                 _logger.LogError(ex, $"Kon bericht niet publiceren naar {queueNaam}: {logBeschrijving}");
                 Console.WriteLine();
-                Console.WriteLine("???????????????????????????????????????????????????????????????");
-                Console.WriteLine($"? FOUT: Kon bericht niet publiceren");
+                Console.WriteLine("═══════════════════════════════════════════════════════════════");
+                Console.WriteLine($"❌ FOUT: Kon bericht niet publiceren");
                 Console.WriteLine($"   Queue: {queueNaam}");
                 Console.WriteLine($"   Fout: {ex.Message}");
-                Console.WriteLine("???????????????????????????????????????????????????????????????");
+                Console.WriteLine("═══════════════════════════════════════════════════════════════");
                 Console.WriteLine();
                 throw;
             }
@@ -334,14 +334,14 @@ namespace BestelApp.Backend.Services
             var queueIcon = GetQueueIcon(queueNaam);
             
             Console.WriteLine();
-            Console.WriteLine("???????????????????????????????????????????????????????????????");
+            Console.WriteLine("═══════════════════════════════════════════════════════════════");
             Console.WriteLine($"{queueIcon} {beschrijving.ToUpper()}");
-            Console.WriteLine("???????????????????????????????????????????????????????????????");
-            Console.WriteLine($"   ?? Tijdstempel  : {tijdstempel}");
-            Console.WriteLine($"   ?? Queue        : {queueNaam}");
-            Console.WriteLine($"   ?? Tracking ID  : {trackingId}");
-            Console.WriteLine("???????????????????????????????????????????????????????????????");
-            Console.WriteLine("   ?? JSON Bericht:");
+            Console.WriteLine("═══════════════════════════════════════════════════════════════");
+            Console.WriteLine($"   📅 Tijdstempel  : {tijdstempel}");
+            Console.WriteLine($"   📨 Queue        : {queueNaam}");
+            Console.WriteLine($"   🔑 Tracking ID  : {trackingId}");
+            Console.WriteLine("───────────────────────────────────────────────────────────────");
+            Console.WriteLine("   📄 JSON Bericht:");
             Console.WriteLine();
             
             // Toon JSON met indentatie
@@ -351,7 +351,7 @@ namespace BestelApp.Backend.Services
             }
             
             Console.WriteLine();
-            Console.WriteLine("???????????????????????????????????????????????????????????????");
+            Console.WriteLine("═══════════════════════════════════════════════════════════════");
             Console.WriteLine();
             
             _logger.LogInformation($"{beschrijving}. Queue: {queueNaam}, Tracking ID: {trackingId}");
@@ -364,14 +364,14 @@ namespace BestelApp.Backend.Services
         {
             return queueNaam switch
             {
-                "bestellingen" => "? BESTELLING GEPLAATST!",
-                "bestelling_updates" => "?? BESTELLING BIJGEWERKT",
-                "bestelling_verwijderd" => "??? BESTELLING VERWIJDERD",
-                "klant_synchronisatie" => "?? KLANT GESYNCHRONISEERD",
-                "voorraad_updates" => "?? VOORRAAD UPDATE",
-                "meldingen" => "?? MELDING VERSTUURD",
-                "audit_log" => "?? AUDIT LOG",
-                _ => "?? BERICHT GEPUBLICEERD"
+                "bestellingen" => "✅ BESTELLING GEPLAATST!",
+                "bestelling_updates" => "🔄 BESTELLING BIJGEWERKT",
+                "bestelling_verwijderd" => "🗑️ BESTELLING VERWIJDERD",
+                "klant_synchronisatie" => "👤 KLANT GESYNCHRONISEERD",
+                "voorraad_updates" => "📦 VOORRAAD UPDATE",
+                "meldingen" => "🔔 MELDING VERSTUURD",
+                "audit_log" => "📝 AUDIT LOG",
+                _ => "📨 BERICHT GEPUBLICEERD"
             };
         }
 
