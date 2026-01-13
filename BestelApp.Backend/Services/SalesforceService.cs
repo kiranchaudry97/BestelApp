@@ -1,77 +1,54 @@
-using BestelApp.Shared.Models;
+﻿using BestelApp.Shared.Models;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using System;
-using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace BestelApp.Backend.Services
 {
     public class SalesforceService : ISalesforceService
     {
-        private readonly HttpClient _httpClient;
         private readonly ILogger<SalesforceService> _logger;
-        private readonly string _salesforceUrl;
-        private readonly string _accessToken;
 
-        public SalesforceService(HttpClient httpClient, ILogger<SalesforceService> logger)
+        public SalesforceService(ILogger<SalesforceService> logger)
         {
-            _httpClient = httpClient;
             _logger = logger;
-            _salesforceUrl = Environment.GetEnvironmentVariable("SALESFORCE_URL");
-            _accessToken = Environment.GetEnvironmentVariable("SALESFORCE_ACCESS_TOKEN");
-
-            if (!string.IsNullOrEmpty(_accessToken))
-            {
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
-            }
         }
 
         public async Task<bool> SendOrderToSalesforceAsync(Bestelling bestelling)
         {
             try
             {
-                var salesforceOrder = new
+                // Gebruik JOUW model met extensions
+                var salesforceData = new
                 {
-                    Bestelnummer__c = bestelling.Bestelnummer,
-                    Klantnaam__c = bestelling.Klantnaam,
-                    Product__c = bestelling.Product,
-                    Aantal__c = bestelling.Aantal,
-                    Totaalprijs__c = bestelling.TotaalPrijs,
-                    Besteldatum__c = bestelling.Besteldatum.ToString("yyyy-MM-dd"),
+                    Bestelnummer__c = bestelling.GetBestelnummer(),
+                    Klantnaam__c = bestelling.GetKlantnaam(),
+                    KlantId__c = bestelling.KlantId,
+                    Producten__c = bestelling.GetProductenSamenvatting(),
+                    AantalItems__c = bestelling.GetTotaalAantal(),
+                    Totaalbedrag__c = bestelling.GetTotaalPrijs(),
+                    Besteldatum__c = bestelling.Datum.ToString("yyyy-MM-dd"),
                     Status__c = "Nieuw",
-                    Bron_Systeem__c = "BestelApp"
+                    Bron_Systeem__c = "BestelApp",
+                    IsVerwerkt__c = false
                 };
 
-                var json = JsonConvert.SerializeObject(salesforceOrder);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                _logger.LogInformation($"📤 Order {bestelling.GetBestelnummer()} naar Salesforce: {salesforceData}");
+                await Task.Delay(500); // Simuleer API call
 
-                var response = await _httpClient.PostAsync(_salesforceUrl, content);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogInformation($"Bestelling {bestelling.Bestelnummer} naar Salesforce gestuurd");
-                    return true;
-                }
-                else
-                {
-                    _logger.LogError($"Salesforce fout: {response.StatusCode}");
-                    return false;
-                }
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Fout bij verzenden naar Salesforce: {ex.Message}");
+                _logger.LogError(ex, $"❌ Fout bij verzenden naar Salesforce");
                 return false;
             }
         }
 
         public async Task<string> GetOrderStatusAsync(string bestelnummer)
         {
-            // Implementeer status check naar Salesforce
-            return await Task.FromResult("Verwerkt");
+            await Task.Delay(100);
+            return "Verwerkt";
         }
     }
 }
