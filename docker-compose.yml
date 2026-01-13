@@ -1,22 +1,64 @@
-version: '3.8'
 
 services:
+  bestelapp:
+    build: .
+    ports:
+      - "8080:8080"    # API port
+      - "15672:15672"  # RabbitMQ Management UI (forwarded)
+    environment:
+      # RabbitMQ config
+      - RABBITMQ__HostName=rabbitmq
+      - RABBITMQ__UserName=${RABBITMQ_USER:-guest}
+      - RABBITMQ__Password=${RABBITMQ_PASS:-guest}
+      - RABBITMQ__Port=5672
+      - RABBITMQ__QueueName=salesforce_queue
+      - RABBITMQ__VirtualHost=/
+      
+      # Salesforce config (gebruik appsettings.json of environment)
+      - SALESFORCE__ConsumerKey=${SALESFORCE_CONSUMER_KEY}
+      - SALESFORCE__ConsumerSecret=${SALESFORCE_CONSUMER_SECRET}
+      - SALESFORCE__Username=${SALESFORCE_USERNAME}
+      - SALESFORCE__Password=${SALESFORCE_PASSWORD}
+      - SALESFORCE__LoginUrl=${SALESFORCE_LOGIN_URL:-https://login.salesforce.com}
+      - SALESFORCE__ApiVersion=${SALESFORCE_API_VERSION:-v58.0}
+      - SALESFORCE__IsSandbox=${SALESFORCE_IS_SANDBOX:-false}
+      - SALESFORCE_ACCESS_TOKEN=${SALESFORCE_ACCESS_TOKEN}  # Of dynamisch verkrijgen
+      
+      # SAP config
+      - SAP__Endpoint=${SAP_IDOC_ENDPOINT}
+      - SAP__Client=${SAP_CLIENT:-100}
+      - SAP__Username=${SAP_USERNAME}
+      - SAP__Password=${SAP_PASSWORD}
+      
+      # Logging
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - ./appsettings.Development.json:/app/appsettings.Development.json:ro
+
   rabbitmq:
-    image: rabbitmq:3-management
-    container_name: bestelapp-rabbitmq
+    image: rabbitmq:3.13-management-alpine
     ports:
       - "5672:5672"    # AMQP protocol
       - "15672:15672"  # Management UI
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_DEFAULT_VHOST=/
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     healthcheck:
-      test: rabbitmq-diagnostics -q ping
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 3
+      start_period: 40s
 
 volumes:
   rabbitmq_data:
